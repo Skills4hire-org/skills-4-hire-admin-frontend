@@ -63,7 +63,7 @@ export default function Verification() {
     setLoading(true);
 
     try {
-      await api.post("/api/v1/auth/verify", {
+      await api.post("/api/v1/auth/verify/", {
         otp: enteredCode,
       });
 
