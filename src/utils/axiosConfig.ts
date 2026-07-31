@@ -9,11 +9,10 @@ export const api = axios.create({
 })
 
 api.interceptors.request.use((config) => {
-  /*   const state = store.getState()
-  const token = state.userState.token
-
+  const token = localStorage.getItem("admin_token")
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
-  } */
+  }
   return config
 })
+

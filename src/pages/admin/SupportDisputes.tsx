@@ -1,18 +1,28 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Search, Send, MoreVertical, Paperclip, AlertCircle, Clock, PlayCircle, CheckCircle2, ArrowLeft } from "lucide-react";
+import { Search, Send, CheckCircle2, AlertCircle, Clock, PlayCircle, ArrowLeft } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { getAdminSupports, getAdminConversationDetail, createAdminConversationReply, assignAdminSupport, patchAdminSupportAction } from "@/api/admin";
 
-type DisputeStatus = "Yet to start" | "On hold" | "Escalate" | "completed";
 
-type ChatPreview = {
+type SupportCase = {
+  support_id: string;
+  status: string;
+  customer?: {
+    first_name: string;
+    last_name: string;
+    email?: string;
+  };
+  is_active: boolean;
+  created_at: string;
+  assigned_at?: string;
+};
+
+type ChatMessage = {
   id: string;
-  name: string;
-  lastMessage: string;
-  time: string;
-  status: DisputeStatus;
-  avatar: string;
-  unread?: boolean;
+  sender: "user" | "support" | "system";
+  text: string;
+  created_at?: string;
 };
 
 const CHART_DATA = [
@@ -30,330 +40,298 @@ const CHART_DATA = [
   { name: 'DEC', value: 140 },
 ];
 
-const INITIAL_CHATS: ChatPreview[] = [
-  { id: "1", name: "Joshua Philip", lastMessage: "I need help with my recent payment.", time: "10:30 AM", status: "Yet to start", avatar: "https://images.unsplash.com/photo-1546456073-ea246a7bd25f?auto=format&fit=crop&q=80&w=150", unread: true },
-  { id: "2", name: "Sarah Jenkins", lastMessage: "Can you review my account limits?", time: "09:15 AM", status: "On hold", avatar: "https://images.unsplash.com/photo-1546456073-ea246a7bd25f?auto=format&fit=crop&q=80&w=150" },
-  { id: "3", name: "Michael Scott", lastMessage: "This is completely unacceptable!!", time: "Yesterday", status: "Escalate", avatar: "https://images.unsplash.com/photo-1546456073-ea246a7bd25f?auto=format&fit=crop&q=80&w=150" },
-  { id: "4", name: "Angela Martin", lastMessage: "Thanks for the swift resolution.", time: "Monday", status: "completed", avatar: "https://images.unsplash.com/photo-1546456073-ea246a7bd25f?auto=format&fit=crop&q=80&w=150" },
-  { id: "5", name: "David Wallace", lastMessage: "When will my dispute be reviewed?", time: "Last Week", status: "Yet to start", avatar: "https://images.unsplash.com/photo-1546456073-ea246a7bd25f?auto=format&fit=crop&q=80&w=150" },
-  { id: "6", name: "Dwight Schrute", lastMessage: "I sent the proofs.", time: "Last Week", status: "On hold", avatar: "https://images.unsplash.com/photo-1546456073-ea246a7bd25f?auto=format&fit=crop&q=80&w=150" },
-];
-
-type ChatMessage = {
-  id: string;
-  sender: "user" | "support" | "system";
-  text: string;
-};
-
-const MOCK_MESSAGES: Record<string, ChatMessage[]> = {
-  "1": [{ id: "m1", sender: "user", text: "I need help with my recent payment." }],
-  "2": [{ id: "m1", sender: "user", text: "Can you review my account limits?" }],
-  "3": [
-    { id: "m1", sender: "user", text: "This is completely unacceptable!!" },
-    { id: "s1", sender: "system", text: "Ticket escalated to high priority" }
-  ],
-  "4": [{ id: "m1", sender: "user", text: "Thanks for the swift resolution." }],
-  "5": [{ id: "m1", sender: "user", text: "When will my dispute be reviewed?" }],
-  "6": [{ id: "m1", sender: "user", text: "I sent the proofs." }]
-};
-
-const StatusPill = ({ status }: { status: DisputeStatus }) => {
+const StatusPill = ({ status }: { status: string }) => {
+  const normStatus = status.toLowerCase();
   return (
     <span
       className={cn(
         "px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1 w-max",
-        status === "completed" && "bg-green-100 text-green-700", 
-        status === "On hold" && "bg-yellow-100 text-yellow-700",   
-        status === "Escalate" && "bg-red-100 text-red-700",
-        status === "Yet to start" && "bg-gray-100 text-gray-700"     
+        normStatus === "completed" && "bg-green-100 text-green-700", 
+        normStatus === "on hold" && "bg-yellow-100 text-yellow-700",   
+        normStatus === "escalate" && "bg-red-100 text-red-700",
+        normStatus === "yet to start" && "bg-gray-100 text-gray-700"     
       )}
     >
-      {status === "completed" && <CheckCircle2 className="w-3 h-3" />}
-      {status === "On hold" && <Clock className="w-3 h-3" />}
-      {status === "Escalate" && <AlertCircle className="w-3 h-3" />}
-      {status === "Yet to start" && <PlayCircle className="w-3 h-3" />}
+      {normStatus === "completed" && <CheckCircle2 className="w-3 h-3" />}
+      {normStatus === "on hold" && <Clock className="w-3 h-3" />}
+      {normStatus === "escalate" && <AlertCircle className="w-3 h-3" />}
+      {normStatus === "yet to start" && <PlayCircle className="w-3 h-3" />}
       {status}
     </span>
   );
 };
 
 export default function SupportDisputes() {
-  const [selectedChat, setSelectedChat] = useState<ChatPreview | null>(() => {
-    if (typeof window !== "undefined" && window.innerWidth < 768) {
-      return null;
-    }
-    return INITIAL_CHATS[0];
-  });
-  const [messages, setMessages] = useState<Record<string, ChatMessage[]>>(MOCK_MESSAGES);
+  const [supportCases, setSupportCases] = useState<SupportCase[]>([]);
+  const [selectedCase, setSelectedCase] = useState<SupportCase | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [messageText, setMessageText] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadingChat, setLoadingChat] = useState(false);
 
-  const handleSendMessage = () => {
-    if (!messageText.trim() || !selectedChat) return;
-    
-    const newMessage: ChatMessage = {
-      id: Date.now().toString(),
-      sender: "support",
-      text: messageText.trim(),
-    };
-    
-    setMessages(prev => ({
-      ...prev,
-      [selectedChat.id]: [...(prev[selectedChat.id] || []), newMessage]
-    }));
-    
-    setMessageText("");
+  const fetchSupports = async () => {
+    setLoading(true);
+    try {
+      const data = await getAdminSupports(searchQuery ? { search: searchQuery } : undefined);
+      if (data) {
+        const results = data.results || [];
+        setSupportCases(results);
+        if (results.length > 0 && !selectedCase) {
+          setSelectedCase(results[0]);
+        }
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    // Simulate user replying back after 2 seconds
-    setTimeout(() => {
-      const mockReply: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        sender: "user",
-        text: "Thanks! I appreciate the fast response.",
-      };
-      setMessages(curr => ({
-        ...curr,
-        [selectedChat.id]: [...(curr[selectedChat.id] || []), mockReply]
-      }));
-    }, 2000);
+  const fetchChatHistory = async (caseId: string) => {
+    setLoadingChat(true);
+    try {
+      const data = await getAdminConversationDetail(caseId);
+      if (data) {
+        // Map messages appropriately from support conversation detail
+        // Detail schema may have 'messages' list
+        const rawMsgs = data.messages || [];
+        setMessages(rawMsgs.map((m: any) => ({
+          id: m.id || m.message_id || String(Math.random()),
+          sender: m.sender_type === "SUPPORT" ? "support" : m.sender_type === "SYSTEM" ? "system" : "user",
+          text: m.message || m.text,
+          created_at: m.created_at
+        })));
+      } else {
+        setMessages([]);
+      }
+    } catch (error) {
+      console.error(error);
+      setMessages([]);
+    } finally {
+      setLoadingChat(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSupports();
+  }, []);
+
+  useEffect(() => {
+    if (selectedCase) {
+      fetchChatHistory(selectedCase.support_id);
+    } else {
+      setMessages([]);
+    }
+  }, [selectedCase]);
+
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || !selectedCase) return;
+    try {
+      const res = await createAdminConversationReply(selectedCase.support_id, {
+        message: messageText.trim()
+      });
+      if (res) {
+        setMessages(prev => [...prev, {
+          id: res.id || String(Math.random()),
+          sender: "support",
+          text: messageText.trim()
+        }]);
+      }
+      setMessageText("");
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleAssignToMe = async () => {
+    if (!selectedCase) return;
+    try {
+      await assignAdminSupport(selectedCase.support_id, {});
+      alert("Ticket assigned successfully!");
+      fetchSupports();
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleStatusAction = async (action: string) => {
+    if (!selectedCase) return;
+    try {
+      await patchAdminSupportAction(selectedCase.support_id, action, {});
+      alert(`Ticket marked as ${action}`);
+      fetchSupports();
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   return (
-    <div className="flex flex-col w-full h-full mt-2 relative">
-      <h1 className={cn(
-        "text-3xl font-semibold text-gray-900 tracking-tight mb-6",
-        selectedChat ? "hidden md:block" : "block"
-      )}>
-        Support & Disputes
-      </h1>
+    <div className="flex flex-col w-full h-full mt-2 relative overflow-hidden text-[#333333] pb-10">
+      
+      {/* Analytics Chart Block */}
+      <div className="bg-[#EBEBEB] rounded-[20px] p-6 mb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+          <div className="flex flex-col gap-1">
+            <span className="text-[14px] text-gray-500 font-semibold">OVERVIEW</span>
+            <h2 className="text-xl lg:text-2xl font-bold text-gray-900 leading-none">Support Tickets & Disputes</h2>
+          </div>
+        </div>
+        <div className="w-full h-[160px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={CHART_DATA} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="supportColor" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#243cd6" stopOpacity={0.2}/>
+                  <stop offset="95%" stopColor="#243cd6" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#D1D5DB" />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#6B7280", fontSize: 11, fontWeight: 500 }} />
+              <Tooltip />
+              <Area type="monotone" dataKey="value" stroke="#243cd6" strokeWidth={2} fillOpacity={1} fill="url(#supportColor)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
 
-      <div className="flex gap-6 h-full flex-col xl:flex-row pb-6">
+      <div className="flex flex-col lg:flex-row gap-6 h-[600px] items-stretch">
         
-        {/* Left Column (Chat Interface replacing Tables) */}
-        <div className="flex-1 w-full border border-gray-200 rounded-3xl bg-white overflow-hidden flex flex-col md:flex-row min-h-[600px] shadow-sm">
-          
-          {/* Conversation List Sidebar */}
-          <div className={cn(
-            "w-full md:w-[320px] shrink-0 border-b md:border-b-0 md:border-r border-gray-200 flex-col bg-gray-50/50 overflow-y-auto md:max-h-none md:flex",
-            selectedChat ? "hidden" : "flex flex-1"
-          )}>
-            <div className="p-5 border-b border-gray-200 bg-white">
-               <h2 className="font-semibold text-gray-800 tracking-tight mb-4 text-lg">Active Tickets</h2>
-               <div className="relative">
-                 <input 
-                   type="text" 
-                   placeholder="Search discussions..." 
-                   className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors" 
-                 />
-                 <Search className="absolute left-3 top-3 text-gray-400 w-4 h-4" />
-               </div>
-            </div>
-            <div className="flex-1 overflow-y-auto w-full">
-              {INITIAL_CHATS.map(chat => (
-                <div 
-                  key={chat.id} 
-                  onClick={() => setSelectedChat(chat)}
-                  className={cn(
-                    "p-4 border-b border-gray-100 cursor-pointer transition-colors hover:bg-white flex flex-col gap-2 relative", 
-                    selectedChat?.id === chat.id && "bg-white"
-                  )}
-                >
-                  {/* Selection Indicator */}
-                  {selectedChat?.id === chat.id && (
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#243cd6]" />
-                  )}
-
-                  <div className="flex justify-between items-start">
-                    <div className="flex items-center gap-3">
-                      <div className="relative">
-                        <img src={chat.avatar} className="w-10 h-10 rounded-full object-cover" alt="avatar" />
-                        {chat.unread && <div className="absolute right-0 top-0 w-2.5 h-2.5 bg-blue-600 rounded-full border border-white" />}
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-gray-800 text-sm tracking-tight">{chat.name}</h4>
-                        <span className="text-[11px] text-gray-400 font-medium">{chat.time}</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-between items-center mt-1 pl-13">
-                    <p className="text-gray-500 text-[13px] truncate pr-4 w-full">{chat.lastMessage}</p>
-                  </div>
-                  <div className="mt-1">
-                    <StatusPill status={chat.status} />
-                  </div>
-                </div>
-              ))}
-            </div>
+        {/* Left Side: Cases List */}
+        <div className={cn(
+          "w-full lg:w-[360px] bg-[#EBEBEB] rounded-[20px] p-4 flex flex-col shrink-0 h-full",
+          selectedCase && "hidden lg:flex"
+        )}>
+          <div className="relative mb-4">
+            <input 
+              type="text" 
+              placeholder="Search disputes..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-white rounded-lg text-sm border-0 focus:ring-2 focus:ring-blue-500/20 placeholder-gray-400 font-medium"
+            />
+            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
           </div>
 
-          {/* Active Chat Window */}
-          <div className={cn(
-            "flex-1 flex-col bg-white md:flex",
-            selectedChat ? "flex" : "hidden"
-          )}>
-            {selectedChat ? (
-              <>
-                {/* Chat Header */}
-                <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white shadow-sm z-10 sticky top-0">
-                  <div className="flex items-center gap-4">
-                    <button 
-                      onClick={() => setSelectedChat(null)}
-                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors md:hidden -ml-2 mr-1"
-                      aria-label="Back to active tickets"
-                    >
-                      <ArrowLeft className="w-6 h-6 text-gray-600" />
-                    </button>
-                    <img src={selectedChat.avatar} className="w-10 h-10 rounded-full object-cover shadow-sm" alt="avatar" />
-                    <div>
-                      <h3 className="font-semibold text-gray-800 text-base">{selectedChat.name}</h3>
-                      <StatusPill status={selectedChat.status} />
-                    </div>
-                  </div>
-                  <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                    <MoreVertical className="w-5 h-5 text-gray-500" />
-                  </button>
+          <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+            {loading ? (
+              <div className="text-center py-10 text-gray-500 font-medium text-sm">Loading tickets...</div>
+            ) : supportCases.map(ticket => (
+              <div 
+                key={ticket.support_id}
+                onClick={() => setSelectedCase(ticket)}
+                className={cn(
+                  "p-4 rounded-xl cursor-pointer transition-all border",
+                  selectedCase?.support_id === ticket.support_id 
+                    ? "bg-[#243cd6] text-white border-transparent" 
+                    : "bg-white text-gray-800 border-gray-100 hover:border-gray-300"
+                )}
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <span className="font-semibold text-sm truncate pr-2">
+                    {ticket.customer ? `${ticket.customer.first_name} ${ticket.customer.last_name}` : "Unknown User"}
+                  </span>
+                  <span className={cn(
+                    "text-[10px] font-medium shrink-0",
+                    selectedCase?.support_id === ticket.support_id ? "text-blue-100" : "text-gray-400"
+                  )}>
+                    {new Date(ticket.created_at).toLocaleDateString()}
+                  </span>
                 </div>
-                
-                {/* Chat Messages */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50/50 flex flex-col">
-                  {(messages[selectedChat.id] || []).map((msg) => (
-                    msg.sender === "system" ? (
-                      <div key={msg.id} className="flex justify-center my-4">
-                        <span className="bg-red-50 text-red-600 px-4 py-1.5 rounded-full text-xs font-semibold shadow-sm border border-red-100 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3" />
-                          {msg.text}
-                        </span>
-                      </div>
-                    ) : msg.sender === "user" ? (
-                      <div key={msg.id} className="flex justify-start">
-                         <div className="bg-white border border-gray-200 text-gray-700 py-3 px-4 rounded-2xl rounded-tl-sm text-[15px] max-w-[75%] shadow-sm leading-relaxed whitespace-pre-wrap">
-                           {msg.text}
-                         </div>
-                      </div>
-                    ) : (
-                      <div key={msg.id} className="flex justify-end">
-                        <div className="bg-[#243cd6] text-white py-3 px-4 rounded-2xl rounded-tr-sm text-[15px] max-w-[75%] shadow-sm leading-relaxed whitespace-pre-wrap text-left">
-                          {msg.text}
-                        </div>
-                      </div>
-                    )
-                  ))}
+                <div className="flex items-center justify-between mt-3">
+                  <span className="text-xs opacity-80 truncate">ID: {ticket.support_id.slice(0, 8)}...</span>
+                  <StatusPill status={ticket.status} />
                 </div>
-
-                {/* Chat Input */}
-                <div className="p-4 bg-white border-t border-gray-200">
-                  <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-2 py-2 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-colors shadow-sm">
-                    <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
-                      <Paperclip className="w-5 h-5"/>
-                    </button>
-                    <input 
-                      type="text" 
-                      placeholder="Reply to customer..." 
-                      className="flex-1 bg-transparent px-2 py-2 text-[15px] focus:outline-none placeholder:text-gray-400 text-gray-700"
-                      value={messageText}
-                      onChange={(e) => setMessageText(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                    />
-                    <button 
-                      onClick={handleSendMessage}
-                      className="p-2.5 bg-[#243cd6] text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={!messageText.trim()}
-                    >
-                      <Send className="w-4 h-4 ml-0.5" />
-                    </button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center bg-gray-50/50 pb-20">
-                <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
-                   <Send className="w-6 h-6 text-gray-400 ml-1" />
-                </div>
-                <h3 className="text-xl font-medium text-gray-800">No ticket selected</h3>
-                <p className="text-gray-500 mt-2 text-sm">Select a conversation from the sidebar to start chatting</p>
               </div>
+            ))}
+            {supportCases.length === 0 && !loading && (
+              <div className="text-center py-10 text-gray-500 font-medium text-sm">No tickets found.</div>
             )}
           </div>
         </div>
 
-        {/* Right Column (Metrics & Recharts - Retained from previous state) */}
+        {/* Right Side: Conversation window */}
         <div className={cn(
-          "w-full xl:w-[350px] bg-[#EBEBEB] rounded-3xl p-6 flex-col shrink-0 xl:flex",
-          selectedChat ? "hidden" : "flex"
+          "flex-1 bg-[#EBEBEB] rounded-[20px] p-4 flex flex-col h-full min-w-0",
+          !selectedCase && "hidden lg:flex justify-center items-center text-gray-400"
         )}>
-          <h2 className="text-center text-[20px] font-semibold text-gray-800 tracking-tight mt-2 mb-6">
-            Dispute Resolution
-          </h2>
-
-          <div className="grid grid-cols-3 gap-3 mb-10 text-[#333333]">
-            <div className="border border-gray-300 rounded-xl py-3 flex flex-col items-center shadow-sm bg-transparent">
-              <span className="text-xl font-bold">18</span>
-              <span className="text-[13px] font-medium text-gray-700">Open</span>
-            </div>
-            <div className="border border-gray-300 rounded-xl py-3 flex flex-col items-center shadow-sm bg-transparent">
-              <span className="text-xl font-bold">5</span>
-              <span className="text-[13px] font-medium text-gray-700">In progress</span>
-            </div>
-            <div className="border border-gray-300 rounded-xl py-3 flex flex-col items-center shadow-sm bg-transparent">
-              <span className="text-xl font-bold">18</span>
-              <span className="text-[13px] font-medium text-gray-700">Resolved</span>
-            </div>
-          </div>
-
-          <div className="w-full h-[220px] mb-12">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={CHART_DATA} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#243cd6" stopOpacity={1}/>
-                    <stop offset="95%" stopColor="#243cd6" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#CBD5E1" opacity={0.6} />
-                <XAxis 
-                  dataKey="name" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fontSize: 9, fill: '#4B5563', fontWeight: 600 }} 
-                  dy={10} 
-                  interval="preserveStartEnd"
-                />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  labelStyle={{ fontWeight: 'bold', color: '#1f2937' }}
-                  itemStyle={{ color: '#243cd6', fontWeight: 500 }}
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="value" 
-                  stroke="#243cd6" 
-                  strokeWidth={3}
-                  fillOpacity={1} 
-                  fill="url(#colorValue)" 
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="border border-gray-300 rounded-2xl p-5 shadow-sm bg-transparent mt-auto">
-            <h3 className="text-center font-semibold text-lg text-gray-800 mb-4">Assign Support</h3>
-            <div className="relative mb-4">
-              <select className="w-full appearance-none border border-gray-300 bg-transparent rounded-lg px-3 py-2.5 text-[15px] font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
-                <option>James Arthur</option>
-                <option>Sarah Jenkins</option>
-                <option>Michael Scott</option>
-              </select>
-              <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
+          {selectedCase ? (
+            <>
+              {/* Chat Header */}
+              <div className="flex items-center justify-between pb-4 border-b border-gray-200 mb-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <button 
+                    onClick={() => setSelectedCase(null)}
+                    className="p-1 hover:bg-gray-200 rounded-lg lg:hidden"
+                  >
+                    <ArrowLeft className="w-5 h-5 text-gray-600" />
+                  </button>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-gray-900 truncate">
+                      {selectedCase.customer ? `${selectedCase.customer.first_name} ${selectedCase.customer.last_name}` : "Unknown User"}
+                    </h3>
+                    <p className="text-xs text-gray-500 truncate">Ticket: {selectedCase.support_id}</p>
+                  </div>
+                </div>
+                
+                <div className="flex gap-2">
+                  <button 
+                    onClick={handleAssignToMe}
+                    className="px-3 py-1 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 text-xs font-semibold rounded-lg transition-colors"
+                  >
+                    Assign to Me
+                  </button>
+                  <button 
+                    onClick={() => handleStatusAction("resolve")}
+                    className="px-3 py-1 bg-[#10b981] hover:bg-green-600 text-white text-xs font-semibold rounded-lg transition-colors"
+                  >
+                    Resolve
+                  </button>
+                </div>
               </div>
-            </div>
-            <button className="w-full bg-[#243cd6] hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition-colors shadow-sm">
-              Assign
-            </button>
-          </div>
 
+              {/* Messages Area */}
+              <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-1">
+                {loadingChat ? (
+                  <div className="text-center py-10 text-gray-500 font-medium text-sm">Loading messages...</div>
+                ) : messages.map((msg) => (
+                  <div 
+                    key={msg.id}
+                    className={cn(
+                      "flex flex-col max-w-[75%] rounded-2xl p-3 text-sm",
+                      msg.sender === "support" 
+                        ? "bg-[#243cd6] text-white ml-auto rounded-tr-none" 
+                        : msg.sender === "system"
+                        ? "bg-gray-200 text-gray-600 mx-auto text-xs py-1.5 px-4 rounded-full"
+                        : "bg-white text-gray-800 mr-auto rounded-tl-none border border-gray-100 shadow-sm"
+                    )}
+                  >
+                    <p className="leading-relaxed break-words">{msg.text}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Input Area */}
+              <div className="flex items-center gap-2 pt-3 border-t border-gray-200">
+                <input 
+                  type="text" 
+                  placeholder="Type your message..." 
+                  value={messageText}
+                  onChange={(e) => setMessageText(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                  className="flex-1 px-4 py-2.5 bg-white border-0 rounded-xl focus:ring-2 focus:ring-blue-500/20 text-sm font-medium placeholder-gray-400"
+                />
+                <button 
+                  onClick={handleSendMessage}
+                  className="p-2.5 bg-[#243cd6] hover:bg-blue-700 text-white rounded-xl transition-all shadow-sm shrink-0"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              </div>
+            </>
+          ) : (
+            <span className="font-medium text-sm">Select a dispute from the left panel to begin</span>
+          )}
         </div>
 
       </div>

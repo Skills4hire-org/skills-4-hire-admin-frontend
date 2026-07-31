@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Users, UserPlus, TrendingUp, ChevronDown } from "lucide-react";
 import { 
   PieChart, 
@@ -11,6 +12,7 @@ import {
   CartesianGrid, 
   Tooltip 
 } from "recharts";
+import { getAdminBookings, getAdminUsers } from "@/api/admin";
 
 const BOOKINGS_DATA = [
   { name: "Completed", value: 60, color: "#10b981" }, // Emerald 500
@@ -41,6 +43,29 @@ const TOP_SERVICES = [
 ];
 
 export default function Overview() {
+  const [usersCount, setUsersCount] = useState(0);
+  const [bookingsCount, setBookingsCount] = useState(0);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [bookingsData, usersData] = await Promise.all([
+          getAdminBookings(),
+          getAdminUsers()
+        ]);
+        if (bookingsData) {
+          setBookingsCount(bookingsData.count || bookingsData.results?.length || 0);
+        }
+        if (usersData) {
+          setUsersCount(usersData.count || usersData.results?.length || 0);
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    };
+    fetchData();
+  }, []);
+
   return (
     <div className="flex flex-col w-full h-full mt-2 relative pb-10">
       <h1 className="text-[28px] lg:text-3xl font-semibold text-gray-900 tracking-tight mb-8">
@@ -85,7 +110,7 @@ export default function Overview() {
                 {/* Center text inside Donut */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mt-1">
                   <span className="text-[11px] font-semibold text-gray-700 leading-none">Bookings</span>
-                  <span className="text-[13px] font-bold text-gray-900 leading-none mt-1">100%</span>
+                  <span className="text-[13px] font-bold text-gray-900 leading-none mt-1">{bookingsCount}</span>
                 </div>
               </div>
 
@@ -108,7 +133,7 @@ export default function Overview() {
               <div className="flex justify-between items-start mb-6">
                 <div className="flex flex-col gap-1">
                   <span className="text-[14px] text-gray-800 font-semibold">Active Users</span>
-                  <span className="text-[26px] font-bold text-gray-900 leading-none">4,000</span>
+                  <span className="text-[26px] font-bold text-gray-900 leading-none">{usersCount.toLocaleString()}</span>
                 </div>
                 <div className="w-10 h-10 rounded-xl bg-blue-400/30 flex items-center justify-center shrink-0">
                   <Users className="w-5 h-5 text-blue-600" />
@@ -127,7 +152,7 @@ export default function Overview() {
               <div className="flex justify-between items-start mb-6">
                 <div className="flex flex-col gap-1">
                   <span className="text-[14px] text-gray-800 font-semibold">New Signups</span>
-                  <span className="text-[26px] font-bold text-gray-900 leading-none">4,000</span>
+                  <span className="text-[26px] font-bold text-gray-900 leading-none">{usersCount.toLocaleString()}</span>
                 </div>
                 <div className="w-10 h-10 rounded-xl bg-emerald-400/30 flex items-center justify-center shrink-0">
                   <UserPlus className="w-5 h-5 text-emerald-600" />

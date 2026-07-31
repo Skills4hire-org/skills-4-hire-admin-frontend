@@ -1,106 +1,130 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, MoreVertical, Pencil, Trash2, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ChevronLeft, ChevronRight, Pencil, Trash2, X } from "lucide-react";
+import { getAdminUsers, patchAdminUser, deleteAdminUser, patchAdminUserAction } from "@/api/admin";
 
-type Provider = {
-  id: number;
-  name: string;
+type UserType = {
+  user_id: string;
+  first_name: string;
+  last_name: string;
   email: string;
   phone: string;
-  service: string;
-  booked: string;
-  avatar: string;
+  active_role: string;
+  is_active: boolean;
+  is_provider: boolean;
+  is_customer: boolean;
+  referral_count: string;
+  avatar?: string;
 };
 
-// Start with 25 members to show multi-page pagination
-const INITIAL_PROVIDERS: Provider[] = Array.from({ length: 25 }).map((_, i) => ({
-  id: i + 1,
-  name: `Provider ${i + 1}`,
-  email: `provider${i + 1}@gmail.com`,
-  phone: "08115923837",
-  service: i % 2 === 0 ? "Plumber" : "Electrician",
-  booked: Math.floor(Math.random() * 100).toString().padStart(4, "0"),
-  avatar: "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&q=80&w=150",
-}));
-
 export default function UserManagement() {
-  // const navigate = useNavigate(); // Removed unused variable to fix build
-  useNavigate(); // Keep the hook call if side effects are needed, though here it's likely safe to remove.
-  // Actually, I'll just remove it.
-
-  const [providers, setProviders] = useState<Provider[]>(INITIAL_PROVIDERS);
+  const [users, setUsers] = useState<UserType[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(true);
   
-  // Pagination State
+  // Pagination & Search & Filter State
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("");
   const itemsPerPage = 8;
-  const totalPages = Math.ceil(providers.length / itemsPerPage);
-  
-  // Derived state for the table
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedProviders = providers.slice(startIndex, startIndex + itemsPerPage);
+  const totalPages = Math.ceil(totalCount / itemsPerPage) || 1;
+
+  // Fetch Users
+  const fetchUsers = async () => {
+    setLoading(true);
+    try {
+      const params: any = {
+        page: currentPage,
+        search: searchQuery || undefined,
+        active_role: roleFilter || undefined,
+      };
+      const data = await getAdminUsers(params);
+      if (data) {
+        setUsers(data.results || []);
+        setTotalCount(data.count || data.results?.length || 0);
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, [currentPage, roleFilter]);
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCurrentPage(1);
+    fetchUsers();
+  };
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
+  const [editingUser, setEditingUser] = useState<UserType | null>(null);
   
   // Form State
   const [formData, setFormData] = useState({
-    name: "",
+    first_name: "",
+    last_name: "",
     email: "",
     phone: "",
-    service: "",
   });
 
-  const openAddModal = () => {
-    setEditingProvider(null);
-    setFormData({ name: "", email: "", phone: "", service: "" });
-    setIsModalOpen(true);
-  };
 
-  const openEditModal = (provider: Provider) => {
-    setEditingProvider(provider);
+  const openEditModal = (user: UserType) => {
+    setEditingUser(user);
     setFormData({
-      name: provider.name,
-      email: provider.email,
-      phone: provider.phone,
-      service: provider.service,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      email: user.email || "",
+      phone: user.phone || "",
     });
     setIsModalOpen(true);
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
-    setEditingProvider(null);
+    setEditingUser(null);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingProvider) {
-      // Edit existing
-      setProviders(providers.map(p => 
-        p.id === editingProvider.id ? { ...p, ...formData } : p
-      ));
-    } else {
-      // Add new
-      const newProvider: Provider = {
-        id: providers.length > 0 ? Math.max(...providers.map(p => p.id)) + 1 : 1,
-        ...formData,
-        booked: "0000",
-        avatar: "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&q=80&w=150",
-      };
-      // Add to beginning of the list
-      setProviders([newProvider, ...providers]);
-      setCurrentPage(1); // Jump back to page 1 to see the newly added user
+    try {
+      if (editingUser) {
+        // Edit existing user
+        await patchAdminUser(editingUser.user_id, formData);
+      } else {
+        // Add new user is not directly supported via a simple post in this admin resource in the schema,
+        // but we can update if needed, or fallback. Since registering an admin/user is done via registration:
+        alert("Please register users via the Signup/Onboarding endpoints.");
+      }
+      fetchUsers();
+    } catch (error) {
+      console.error(error);
     }
     closeModal();
   };
 
-  const handleDelete = (id: number) => {
-    if (window.confirm("Are you sure you want to delete this provider?")) {
-      setProviders(providers.filter(p => p.id !== id));
-      // Adjust page if we delete the last item on the current page
-      if (paginatedProviders.length === 1 && currentPage > 1) {
-        setCurrentPage(currentPage - 1);
+  const handleDelete = async (id: string) => {
+    if (window.confirm("Are you sure you want to delete this user?")) {
+      try {
+        await deleteAdminUser(id);
+        fetchUsers();
+      } catch (error) {
+        console.error(error);
+      }
+    }
+  };
+
+  const handleToggleActive = async (user: UserType) => {
+    const action = user.is_active ? "deactivate" : "activate";
+    if (window.confirm(`Are you sure you want to ${action} this user?`)) {
+      try {
+        await patchAdminUserAction(user.user_id, action, {});
+        fetchUsers();
+      } catch (error) {
+        console.error(error);
       }
     }
   };
@@ -111,91 +135,128 @@ export default function UserManagement() {
 
       <div className="bg-[#EAEBEA]/50 rounded-2xl p-6 sm:p-8 flex-1 box-border">
         {/* Header row */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <h2 className="text-xl sm:text-2xl font-semibold text-gray-800">
-            {providers.length} Service Providers
+            {totalCount} Total Users
           </h2>
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={openAddModal}
-              className="bg-[#243cd6] hover:bg-blue-700 text-white font-medium px-8 py-2.5 rounded-full transition-colors"
+          
+          <form onSubmit={handleSearchSubmit} className="flex flex-wrap items-center gap-3">
+            <input
+              type="text"
+              placeholder="Search users..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            />
+            <select
+              value={roleFilter}
+              onChange={(e) => {
+                setRoleFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             >
-              Add
+              <option value="">All Roles</option>
+              <option value="ADMIN">Admin</option>
+              <option value="CUSTOMER">Customer</option>
+              <option value="SERVICE_PROVIDER">Service Provider</option>
+            </select>
+            <button
+              type="submit"
+              className="bg-[#243cd6] hover:bg-blue-700 text-white font-medium px-6 py-2 rounded-lg text-sm transition-colors"
+            >
+              Search
             </button>
-            <button className="text-gray-600 hover:text-gray-900 transition-colors p-1">
-              <MoreVertical className="w-6 h-6" />
-            </button>
-          </div>
+          </form>
         </div>
 
         {/* Table */}
         <div className="w-full overflow-x-auto min-h-[400px]">
-          <table className="w-full text-left whitespace-nowrap min-w-[800px]">
-            <thead>
-              <tr className="text-gray-800 font-semibold border-b border-transparent">
-                <th className="pb-4 font-semibold text-[15px]">Handyman Name</th>
-                <th className="pb-4 font-semibold text-[15px]">Email</th>
-                <th className="pb-4 font-semibold text-[15px]">Phone</th>
-                <th className="pb-4 font-semibold text-[15px]">Service</th>
-                <th className="pb-4 font-semibold text-[15px]">Booked</th>
-                <th className="pb-4 font-semibold text-[15px] text-right pr-4">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="space-y-4">
-              {paginatedProviders.map((provider) => (
-                <tr 
-                  key={provider.id} 
-                  className="group text-[15px] font-medium text-gray-700 hover:bg-white/40 rounded-lg transition-colors"
-                >
-                  <td className="py-3 pl-2 rounded-l-lg truncate max-w-[200px]">
-                    <div className="flex items-center gap-3">
-                      <img 
-                        src={provider.avatar} 
-                        alt={provider.name} 
-                        className="w-8 h-8 rounded-full object-cover shadow-sm bg-blue-100 shrink-0"
-                      />
-                      <span className="truncate">{provider.name}</span>
-                    </div>
-                  </td>
-                  <td className="py-3 truncate max-w-[200px]">{provider.email}</td>
-                  <td className="py-3">{provider.phone}</td>
-                  <td className="py-3">{provider.service}</td>
-                  <td className="py-3">{provider.booked}</td>
-                  <td className="py-3 pr-2 rounded-r-lg">
-                    <div className="flex items-center justify-end gap-3 pr-2">
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openEditModal(provider);
-                        }}
-                        className="text-gray-600 hover:text-blue-600 transition-colors p-1 bg-transparent hover:bg-white rounded-md shadow-sm"
-                        title="Edit"
-                      >
-                        <Pencil className="w-[18px] h-[18px]" />
-                      </button>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(provider.id);
-                        }}
-                        className="text-gray-600 hover:text-red-500 transition-colors p-1 bg-transparent hover:bg-white rounded-md shadow-sm"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-[18px] h-[18px]" />
-                      </button>
-                    </div>
-                  </td>
+          {loading ? (
+            <div className="flex justify-center items-center py-20">
+              <span className="text-gray-500 font-medium">Loading users...</span>
+            </div>
+          ) : (
+            <table className="w-full text-left whitespace-nowrap min-w-[800px]">
+              <thead>
+                <tr className="text-gray-800 font-semibold border-b border-transparent">
+                  <th className="pb-4 font-semibold text-[15px]">Name</th>
+                  <th className="pb-4 font-semibold text-[15px]">Email</th>
+                  <th className="pb-4 font-semibold text-[15px]">Phone</th>
+                  <th className="pb-4 font-semibold text-[15px]">Role</th>
+                  <th className="pb-4 font-semibold text-[15px]">Status</th>
+                  <th className="pb-4 font-semibold text-[15px] text-right pr-4">Actions</th>
                 </tr>
-              ))}
-              {paginatedProviders.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="text-center py-8 text-gray-500">
-                    No service providers found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="space-y-4">
+                {users.map((user) => (
+                  <tr 
+                    key={user.user_id} 
+                    className="group text-[15px] font-medium text-gray-700 hover:bg-white/40 rounded-lg transition-colors"
+                  >
+                    <td className="py-3 pl-2 rounded-l-lg truncate max-w-[200px]">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 shrink-0 flex items-center justify-center font-bold text-blue-600 text-sm">
+                          {user.first_name[0]}{user.last_name[0]}
+                        </div>
+                        <span className="truncate">{user.first_name} {user.last_name}</span>
+                      </div>
+                    </td>
+                    <td className="py-3 truncate max-w-[200px]">{user.email || "N/A"}</td>
+                    <td className="py-3">{user.phone || "N/A"}</td>
+                    <td className="py-3">
+                      <span className="px-2 py-1 rounded text-xs font-semibold bg-gray-200 text-gray-800">
+                        {user.active_role}
+                      </span>
+                    </td>
+                    <td className="py-3">
+                      <button
+                        onClick={() => handleToggleActive(user)}
+                        className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                          user.is_active 
+                            ? "bg-green-100 text-green-700 hover:bg-green-200" 
+                            : "bg-red-100 text-red-700 hover:bg-red-200"
+                        }`}
+                      >
+                        {user.is_active ? "Active" : "Deactivated"}
+                      </button>
+                    </td>
+                    <td className="py-3 pr-2 rounded-r-lg">
+                      <div className="flex items-center justify-end gap-3 pr-2">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditModal(user);
+                          }}
+                          className="text-gray-600 hover:text-blue-600 transition-colors p-1 bg-transparent hover:bg-white rounded-md shadow-sm"
+                          title="Edit"
+                        >
+                          <Pencil className="w-[18px] h-[18px]" />
+                        </button>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(user.user_id);
+                          }}
+                          className="text-gray-600 hover:text-red-500 transition-colors p-1 bg-transparent hover:bg-white rounded-md shadow-sm"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-[18px] h-[18px]" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {users.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="text-center py-8 text-gray-500">
+                      No users found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
 
         {/* Pagination */}
@@ -236,13 +297,13 @@ export default function UserManagement() {
         )}
       </div>
 
-      {/* Modal for Add/Edit */}
+      {/* Modal for Edit */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <h3 className="text-lg font-semibold text-gray-900">
-                {editingProvider ? "Edit Service Provider" : "Add Service Provider"}
+                Edit User
               </h3>
               <button 
                 onClick={closeModal} 
@@ -254,14 +315,24 @@ export default function UserManagement() {
             
             <form onSubmit={handleSave} className="p-6 space-y-4">
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-gray-700">Full Name</label>
+                <label className="text-sm font-medium text-gray-700">First Name</label>
                 <input 
                   type="text" 
                   required
-                  value={formData.name}
-                  onChange={e => setFormData({...formData, name: e.target.value})}
+                  value={formData.first_name}
+                  onChange={e => setFormData({...formData, first_name: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                  placeholder="e.g. Joshua Friday"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Last Name</label>
+                <input 
+                  type="text" 
+                  required
+                  value={formData.last_name}
+                  onChange={e => setFormData({...formData, last_name: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                 />
               </div>
               
@@ -273,7 +344,6 @@ export default function UserManagement() {
                   value={formData.email}
                   onChange={e => setFormData({...formData, email: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                  placeholder="e.g. josh@gmail.com"
                 />
               </div>
 
@@ -281,29 +351,10 @@ export default function UserManagement() {
                 <label className="text-sm font-medium text-gray-700">Phone Number</label>
                 <input 
                   type="tel" 
-                  required
                   value={formData.phone}
                   onChange={e => setFormData({...formData, phone: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                  placeholder="e.g. 08115923837"
                 />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-gray-700">Service Category</label>
-                <select 
-                  required
-                  value={formData.service}
-                  onChange={e => setFormData({...formData, service: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors bg-white"
-                >
-                  <option value="" disabled>Select a service</option>
-                  <option value="Plumber">Plumber</option>
-                  <option value="Electrician">Electrician</option>
-                  <option value="Carpenter">Carpenter</option>
-                  <option value="Cleaner">Cleaner</option>
-                  <option value="Painter">Painter</option>
-                </select>
               </div>
 
               <div className="pt-4 flex items-center justify-end gap-3 mt-4">
@@ -318,7 +369,7 @@ export default function UserManagement() {
                   type="submit" 
                   className="px-5 py-2.5 bg-[#243cd6] text-white font-medium hover:bg-blue-700 rounded-lg transition-colors shadow-sm"
                 >
-                  {editingProvider ? "Save Changes" : "Add Provider"}
+                  Save Changes
                 </button>
               </div>
             </form>

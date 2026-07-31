@@ -32,8 +32,10 @@ export default function SignIn() {
     try {
       const res = await login(validatedData);
       console.log("LOGIN RESPONSE:", res);
-
-      navigate("/");
+      if (res?.access) {
+        localStorage.setItem("admin_token", res.access);
+      }
+      navigate("/admin");
     } catch (err) {
       console.error(err);
     } finally {
