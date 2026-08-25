@@ -291,6 +291,16 @@ export const getUserPosts = async ({
     handleApiError(error)
   }
 }
+export const getJobApplications = async (pageParam?: string) => {
+  try {
+    const url = pageParam || '/api/v1/job/application/';
+    const response = await api.get(url);
+    return response?.data;
+  } catch (error) {
+    handleApiError(error);
+  }
+}
+
 export const getUserComments = async ({
   pageParam,
   id,

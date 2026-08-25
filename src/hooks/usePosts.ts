@@ -9,6 +9,7 @@ import {
   getMyPosts,
   getOffers,
   getPost,
+  getJobApplications,
   getPosts,
   getRepostedBy,
   getUserComments,
@@ -380,6 +381,19 @@ export const useRepostedBy = ({ post_id }: { post_id: string | undefined }) => {
   const queryData = useInfiniteQuery({
     queryKey: ['post', post_id],
     queryFn: ({ pageParam }) => getRepostedBy({ pageParam, post_id }),
+    initialPageParam: undefined,
+    getNextPageParam: (lastPage) => {
+      return lastPage.next ?? undefined
+    },
+    retry: 1,
+  })
+  return queryData
+}
+
+export const useJobApplications = () => {
+  const queryData = useInfiniteQuery({
+    queryKey: ['jobApplications'],
+    queryFn: ({ pageParam }) => getJobApplications(pageParam),
     initialPageParam: undefined,
     getNextPageParam: (lastPage) => {
       return lastPage.next ?? undefined
