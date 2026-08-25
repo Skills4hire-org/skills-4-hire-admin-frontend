@@ -194,3 +194,75 @@ export const getAdminUserReferrals = async (id: string) => {
     handleApiError(error);
   }
 };
+
+// Application Categories
+export const getAdminApplicationCategories = async (params?: any) => {
+  try {
+    const response = await api.get("/api/admin/application/category/", { params });
+    return response?.data;
+  } catch (error: any) {
+    console.error("getAdminApplicationCategories error:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Jobs (External Applications)
+export const getAdminJobs = async (params?: any) => {
+  try {
+    const response = await api.get("/api/admin/application/external/", { params });
+    return response?.data;
+  } catch (error: any) {
+    console.error("getAdminJobs error:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const getAdminJobDetail = async (id: string) => {
+  try {
+    const response = await api.get(`/api/admin/application/external/${id}/`);
+    return response?.data;
+  } catch (error: any) {
+    console.error("getAdminJobDetail error:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const createAdminJob = async (data: any) => {
+  try {
+    const response = await api.post("/api/admin/application/external/", data);
+    return response?.data;
+  } catch (error: any) {
+    console.error("createAdminJob error:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const updateAdminJob = async (id: string, data: any) => {
+  try {
+    const response = await api.put(`/api/admin/application/external/${id}/`, data);
+    return response?.data;
+  } catch (error: any) {
+    console.error("updateAdminJob error:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const patchAdminJob = async (id: string, data: any) => {
+  try {
+    const response = await api.patch(`/api/admin/application/external/${id}/`, data);
+    return response?.data;
+  } catch (error: any) {
+    console.error("patchAdminJob error:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const deleteAdminJob = async (id: string) => {
+  try {
+    const response = await api.delete(`/api/admin/application/external/${id}/`);
+    return response?.data;
+  } catch (error: any) {
+    console.error("deleteAdminJob error:", error.response?.data || error.message);
+    throw error;
+  }
+};

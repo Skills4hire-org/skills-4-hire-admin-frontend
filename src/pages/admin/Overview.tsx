@@ -87,8 +87,8 @@ export default function Overview() {
             </div>
             
             <div className="flex-1 flex gap-8 items-center mt-2">
-              <div className="relative w-[130px] h-[130px] shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="relative w-[130px] h-[130px] shrink-0 min-w-[130px] min-h-[130px]">
+                <ResponsiveContainer width="100%" height="100%" minWidth={130} minHeight={130}>
                   <PieChart>
                     <Pie
                       data={BOOKINGS_DATA}
@@ -169,8 +169,8 @@ export default function Overview() {
             {/* Support Chart */}
             <div className="bg-[#C2C1BD]/60 rounded-2xl p-5 shadow-sm flex flex-col relative h-[180px]">
               <h3 className="text-[15px] font-semibold text-gray-800 absolute top-4 left-5 z-10">Support</h3>
-              <div className="w-full h-full flex items-center justify-center mt-3 pt-6 relative">
-                 <ResponsiveContainer width="100%" height={120}>
+              <div className="w-full h-full min-w-0 min-h-0 flex items-center justify-center mt-3 pt-6 relative">
+                 <ResponsiveContainer width="100%" height={120} minWidth={0} minHeight={120}>
                     <PieChart>
                        <Pie
                          data={SUPPORT_DATA}
@@ -253,8 +253,8 @@ export default function Overview() {
                </button>
             </div>
             
-            <div className="w-full h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="w-full h-[300px] min-w-0 min-h-[300px]">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={300}>
                 <LineChart data={LINE_CHART_DATA} margin={{ top: 5, right: 0, left: -20, bottom: 5 }}>
                   <CartesianGrid vertical={false} stroke="#E5E7EB" />
                   <XAxis 

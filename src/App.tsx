@@ -71,6 +71,17 @@ import Finance from './pages/admin/Finance'
 import ContentModeration from './pages/admin/ContentModeration'
 import Analytics from './pages/admin/Analytics'
 import Overview from './pages/admin/Overview'
+import Jobs from './pages/admin/Jobs'
+
+const AdminRoute = () => {
+  const token = localStorage.getItem('admin_token') || localStorage.getItem('accessToken') || localStorage.getItem('token') || localStorage.getItem('access')
+
+  if (!token) {
+    return <Navigate to="/sign-in" replace />
+  }
+
+  return <AdminLayout />
+}
 
 const router = createBrowserRouter([
   {
@@ -138,7 +149,7 @@ const router = createBrowserRouter([
       {
         path: "home",
         element: <HomeLayout />,
-        children: [
+        children: [ 
           {
             index: true,
             element: <Navigate to="posts" />,
@@ -301,7 +312,7 @@ const router = createBrowserRouter([
   },
   {
     path: "/admin",
-    element: <AdminLayout />,
+    element: <AdminRoute />,
     children: [
       {
         index: true,
@@ -314,6 +325,10 @@ const router = createBrowserRouter([
       {
         path: "services",
         element: <AdminServices />,
+      },
+      {
+        path: "jobs",
+        element: <Jobs />,
       },
       {
         path: "support",

@@ -13,7 +13,8 @@ import {
   TrendingUp, 
   UserCog,
   Menu,
-  X
+  X,
+  Briefcase
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 
@@ -21,6 +22,7 @@ const SIDEBAR_LINKS = [
   { name: "Overview", href: "/admin", icon: LayoutGrid, exact: true },
   { name: "User Management", href: "/admin/user-management", icon: Users },
   { name: "Services", href: "/admin/services", icon: List },
+  { name: "Jobs", href: "/admin/jobs", icon: Briefcase },
   { name: "Transactions", href: "/admin/transactions", icon: Building2 },
   { name: "Financial", href: "/admin/financial", icon: BarChart2 },
   { name: "Content Moderation", href: "/admin/content-moderation", icon: ShieldAlert },
@@ -45,7 +47,7 @@ export default function AdminLayout() {
 
       {/* Sidebar */}
       <aside className={cn(
-        "w-64 flex-shrink-0 bg-[#243cd6] text-white flex flex-col h-full lg:rounded-tr-xl lg:rounded-br-xl shadow-xl z-50 fixed lg:static transition-transform duration-300 ease-in-out",
+        "w-64 shrink-0 bg-[#243cd6] text-white flex flex-col h-full lg:rounded-tr-xl lg:rounded-br-xl shadow-xl z-50 fixed lg:static transition-transform duration-300 ease-in-out",
         isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
       )}>
         <div className="p-6 flex items-center justify-between lg:justify-center border-b border-white/10 relative shrink-0">
