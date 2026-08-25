@@ -39,6 +39,19 @@ const refreshAccessToken = async (): Promise<string> => {
   return refreshPromise
 }
 
+const getStoredAdminToken = () => {
+  const tokenKeys = ["admin_token", "accessToken", "token", "access"]
+
+  for (const key of tokenKeys) {
+    const value = localStorage.getItem(key)
+    if (value) {
+      return value
+    }
+  }
+
+  return null
+}
+
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
   timeout: 60000,
@@ -49,7 +62,7 @@ export const api = axios.create({
 /* REQUEST INTERCEPTOR */
 api.interceptors.request.use(async (config) => {
   const state = store.getState()
-  let token = state.userState.access
+  let token = state.userState.access || getStoredAdminToken()
 
   if (token) {
     if (isTokenExpired(token)) {

@@ -19,6 +19,15 @@ export const login = async (data: LoginPayload) => {
   }
 }
 
+export const adminLogin = async (data: LoginPayload) => {
+  try {
+    const response = await api.post('/api/admin/login/', data)
+    return response?.data
+  } catch (error) {
+    handleApiError(error)
+  }
+}
+
 export const register = async (data: RegisterPayload) => {
   try {
     const response = await api.post('/api/v1/auth/register/', data)

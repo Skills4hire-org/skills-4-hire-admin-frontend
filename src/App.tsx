@@ -58,11 +58,28 @@ import WithdrawSuccess from './pages/WithdrawSuccess'
 import WithdrawPin from './pages/WithdrawPin'
 import OnboardingRole from './pages/OnboardingRole'
 import UploadPhoto from './pages/UploadPhoto'
-import Endorsers from './pages/Endorsers'
-import Endorsed from './pages/Endorsed'
-import ProfileActivity from './pages/ProfileActivity'
-import ProfileServices from './pages/ProfileServices'
-import ProfileGallery from './pages/ProfileGallery'
+import OnboardingGuard from './pages/OnboardingGuard'
+
+import AdminLayout from './components/layouts/AdminLayout'
+import UserManagement from './pages/admin/UserManagement'
+import AdminServices from './pages/admin/AdminServices'
+import SupportDisputes from './pages/admin/SupportDisputes'
+import Transactions from './pages/admin/Transactions'
+import Finance from './pages/admin/Finance'
+import ContentModeration from './pages/admin/ContentModeration'
+import Analytics from './pages/admin/Analytics'
+import Overview from './pages/admin/Overview'
+import Jobs from './pages/admin/Jobs'
+
+const AdminRoute = () => {
+  const token = localStorage.getItem('admin_token') || localStorage.getItem('accessToken') || localStorage.getItem('token') || localStorage.getItem('access')
+
+  if (!token) {
+    return <Navigate to="/sign-in" replace />
+  }
+
+  return <AdminLayout />
+}
 
 const router = createBrowserRouter([
   {
@@ -142,7 +159,7 @@ const router = createBrowserRouter([
       {
         path: 'home',
         element: <HomeLayout />,
-        children: [
+        children: [ 
           {
             index: true,
             element: <Navigate to="posts" />,
@@ -309,15 +326,99 @@ const router = createBrowserRouter([
     ],
   },
   {
-    path: 'terms-and-conditions',
+    path: "/admin",
+    element: <AdminRoute />,
+    children: [
+      {
+        index: true,
+        element: <Overview />,
+      },
+      {
+        path: "user-management",
+        element: <UserManagement />,
+      },
+      {
+        path: "services",
+        element: <AdminServices />,
+      },
+      {
+        path: "jobs",
+        element: <Jobs />,
+      },
+      {
+        path: "support",
+        element: <SupportDisputes />,
+      },
+      {
+        path: "transactions",
+        element: <Transactions />,
+      },
+      {
+        path: "financial",
+        element: <Finance />,
+      },
+      {
+        path: "content-moderation",
+        element: <ContentModeration />,
+      },
+      {
+        path: "analytics",
+        element: <Analytics />,
+      },
+    ],
+  },
+  {
+    path: "/admin",
+    element: <AdminRoute />,
+    children: [
+      {
+        index: true,
+        element: <Overview />,
+      },
+      {
+        path: "user-management",
+        element: <UserManagement />,
+      },
+      {
+        path: "services",
+        element: <AdminServices />,
+      },
+      {
+        path: "jobs",
+        element: <Jobs />,
+      },
+      {
+        path: "support",
+        element: <SupportDisputes />,
+      },
+      {
+        path: "transactions",
+        element: <Transactions />,
+      },
+      {
+        path: "financial",
+        element: <Finance />,
+      },
+      {
+        path: "content-moderation",
+        element: <ContentModeration />,
+      },
+      {
+        path: "analytics",
+        element: <Analytics />,
+      },
+    ],
+  },
+  {
+    path: "terms-and-conditions",
     element: <TermsAndConditions />,
   },
   {
-    path: 'privacy-policy',
+    path: "privacy-policy",
     element: <PrivacyPolicy />,
   },
   {
-    path: 'faq',
+    path: "faq",
     element: <FAQs />,
   },
 ])
