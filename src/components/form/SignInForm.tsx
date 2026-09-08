@@ -1,9 +1,7 @@
-import { login } from '@/api/auth'
-import { setUserCredentials } from '@/features/user/userSlice'
+import { adminLogin } from '@/api/auth'
 import { useValidateSchema } from '@/hooks/useValidateSchema'
 import { loginSchema } from '@/utils/schemas'
 import { useState } from 'react'
-import { useDispatch } from 'react-redux'
 import { Link, useNavigate } from 'react-router-dom'
 import FormInput from '../form-fields/FormInput'
 import { toast } from 'sonner'
@@ -14,7 +12,6 @@ interface SignInFormProps {
 
 export default function SignInForm({ initialEmail }: SignInFormProps) {
   const navigate = useNavigate()
-  const dispatch = useDispatch()
 
   const [formData, setFormData] = useState({
     email: initialEmail || '',
@@ -36,20 +33,15 @@ export default function SignInForm({ initialEmail }: SignInFormProps) {
     setLoading(true)
 
     try {
-      const response = await login(validatedData)
-      dispatch(setUserCredentials(response?.data))
+      const response = await adminLogin(validatedData)
+      const authData = response?.data ?? response
 
-      if (
-        !response?.data?.user_data?.is_customer &&
-        !response?.data?.user_data?.is_provider
-      ) {
-        navigate(`/onboarding`)
-      } else {
-        const userType = response?.user_data?.is_customer
-          ? 'customer'
-          : 'professional'
-        navigate(`/${userType}/home`)
+      if (!authData?.access) {
+        throw new Error('Admin login did not return an access token')
       }
+
+      localStorage.setItem('admin_token', authData.access)
+      navigate('/admin', { replace: true })
     } catch (error: any) {
       toast.error(error?.message)
     } finally {
