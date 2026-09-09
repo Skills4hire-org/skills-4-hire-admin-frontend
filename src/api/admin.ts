@@ -206,6 +206,22 @@ export const getAdminApplicationCategories = async (params?: any) => {
   }
 };
 
+// Service Categories (used as fallback for job category list)
+export const getAdminServiceCategories = async (params?: any) => {
+  try {
+    const response = await api.get("/api/admin/service/", { params });
+    return response?.data;
+  } catch (error: any) {
+    try {
+      const fallback = await api.get("/api/services/", { params });
+      return fallback?.data;
+    } catch (fallbackError: any) {
+      console.error("getAdminServiceCategories error:", fallbackError.response?.data || fallbackError.message);
+      throw fallbackError;
+    }
+  }
+};
+
 // Jobs (External Applications)
 export const getAdminJobs = async (params?: any) => {
   try {

@@ -6,7 +6,25 @@ import {
   updateAdminJob,
   deleteAdminJob,
   getAdminApplicationCategories,
+  getAdminServiceCategories,
 } from "@/api/admin";
+
+// Common currencies with symbols
+const CURRENCIES = [
+  { code: "USD", symbol: "$", label: "USD ($)" },
+  { code: "EUR", symbol: "€", label: "EUR (€)" },
+  { code: "GBP", symbol: "£", label: "GBP (£)" },
+  { code: "NGN", symbol: "₦", label: "NGN (₦)" },
+  { code: "GHS", symbol: "₵", label: "GHS (₵)" },
+  { code: "KES", symbol: "KSh", label: "KES (KSh)" },
+  { code: "ZAR", symbol: "R", label: "ZAR (R)" },
+  { code: "CAD", symbol: "CA$", label: "CAD (CA$)" },
+  { code: "AUD", symbol: "A$", label: "AUD (A$)" },
+  { code: "INR", symbol: "₹", label: "INR (₹)" },
+];
+
+const getCurrencySymbol = (code: string) =>
+  CURRENCIES.find((c) => c.code === code)?.symbol ?? code;
 
 type Job = {
   id: string;
@@ -19,13 +37,16 @@ type Job = {
   job_link?: string;
   min_charge?: number;
   max_charge?: number;
+  currency?: string;
   category?: string;
   [key: string]: any;
 };
 
+type CategoryOption = { id: string; name: string };
+
 export default function Jobs() {
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [categories, setCategories] = useState<{ category_id: string; name: string }[]>([]);
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -40,6 +61,7 @@ export default function Jobs() {
     job_link: "",
     min_charge: "",
     max_charge: "",
+    currency: "USD",
     category: "",
   });
 
@@ -51,7 +73,7 @@ export default function Jobs() {
       const response = await getAdminJobs();
       console.log("Fetch jobs response:", response);
       if (response) {
-        const jobsData = Array.isArray(response)
+        const rawList = Array.isArray(response)
           ? response
           : Array.isArray(response.results)
           ? response.results
@@ -60,6 +82,12 @@ export default function Jobs() {
           : Array.isArray(response.data)
           ? response.data
           : [];
+        // Normalize: ensure every job has an `id` field regardless of what the backend calls it
+        const jobsData: Job[] = rawList.map((job: any) => ({
+          ...job,
+          id: job.id ?? job.application_id ?? job.external_id ?? job.job_id ?? job.pk ?? "",
+        }));
+        console.log("Normalized jobs:", jobsData.map((j) => ({ id: j.id, title: j.title })));
         setJobs(jobsData);
       }
     } catch (err: any) {
@@ -78,9 +106,16 @@ export default function Jobs() {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await getAdminApplicationCategories();
-        if (response) {
-          const data = Array.isArray(response)
+        // Normalize a raw list into { id, name } regardless of API shape
+        const normalize = (raw: any[]): CategoryOption[] =>
+          raw.map((item) => ({
+            id: item.category_id ?? item.id ?? String(item),
+            name: item.name ?? item.category_name ?? String(item),
+          }));
+
+        const toArray = (response: any): any[] => {
+          if (!response) return [];
+          return Array.isArray(response)
             ? response
             : Array.isArray(response.results)
             ? response.results
@@ -89,8 +124,29 @@ export default function Jobs() {
             : Array.isArray(response.data)
             ? response.data
             : [];
-          setCategories(data);
+        };
+
+        // Fetch application categories and service categories in parallel
+        const [appCatRes, svcCatRes] = await Promise.allSettled([
+          getAdminApplicationCategories(),
+          getAdminServiceCategories(),
+        ]);
+
+        const appCats = appCatRes.status === "fulfilled" ? normalize(toArray(appCatRes.value)) : [];
+        const svcCats = svcCatRes.status === "fulfilled" ? normalize(toArray(svcCatRes.value)) : [];
+
+        // Merge, deduplicate by name (case-insensitive)
+        const seen = new Set<string>();
+        const merged: CategoryOption[] = [];
+        for (const cat of [...appCats, ...svcCats]) {
+          const key = cat.name.toLowerCase().trim();
+          if (!seen.has(key)) {
+            seen.add(key);
+            merged.push(cat);
+          }
         }
+        merged.sort((a, b) => a.name.localeCompare(b.name));
+        setCategories(merged);
       } catch (err) {
         console.error("Error fetching categories:", err);
       }
@@ -110,6 +166,7 @@ export default function Jobs() {
       job_link: "",
       min_charge: "",
       max_charge: "",
+      currency: "USD",
       category: "",
     });
     setIsModalOpen(true);
@@ -127,6 +184,7 @@ export default function Jobs() {
       job_link: job.job_link || "",
       min_charge: job.min_charge?.toString() || "",
       max_charge: job.max_charge?.toString() || "",
+      currency: job.currency || "USD",
       category: job.category || "",
     });
     setIsModalOpen(true);
@@ -172,6 +230,10 @@ export default function Jobs() {
       console.log("Sending payload:", payload);
 
       if (editingJob) {
+        if (!editingJob.id) {
+          setError("Cannot update: job ID is missing. Check the browser console for the raw API response.");
+          return;
+        }
         const response = await updateAdminJob(editingJob.id, payload);
         console.log("Update response:", response);
       } else {
@@ -192,6 +254,10 @@ export default function Jobs() {
   };
 
   const handleDelete = async (id: string) => {
+    if (!id) {
+      setError("Cannot delete: job ID is missing. Check the browser console for the raw API response.");
+      return;
+    }
     if (!window.confirm("Are you sure you want to delete this job?")) {
       return;
     }
@@ -296,11 +362,13 @@ export default function Jobs() {
                           {job.job_type || "—"}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600">
-                          {job.min_charge && job.max_charge
-                            ? `$${job.min_charge} - $${job.max_charge}`
-                            : job.min_charge
-                            ? `$${job.min_charge}+`
-                            : "—"}
+                          {(() => {
+                            const sym = getCurrencySymbol(job.currency || "USD");
+                            if (job.min_charge && job.max_charge)
+                              return `${sym}${job.min_charge} - ${sym}${job.max_charge}`;
+                            if (job.min_charge) return `${sym}${job.min_charge}+`;
+                            return "—";
+                          })()}
                         </td>
                         <td className="px-6 py-4 text-sm">
                           <span
@@ -448,34 +516,64 @@ export default function Jobs() {
                 />
               </div>
 
-              {/* Min and Max Charge */}
+              {/* Currency, Min and Max Charge */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Currency
+                </label>
+                <select
+                  name="currency"
+                  value={formData.currency}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#243cd6]/50 focus:border-transparent outline-none transition-colors"
+                >
+                  {CURRENCIES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Min Charge ($)
+                    Min Charge ({getCurrencySymbol(formData.currency)})
                   </label>
-                  <input
-                    type="number"
-                    name="min_charge"
-                    value={formData.min_charge}
-                    onChange={handleInputChange}
-                    placeholder="Minimum charge"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#243cd6]/50 focus:border-transparent outline-none transition-colors"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm select-none">
+                      {getCurrencySymbol(formData.currency)}
+                    </span>
+                    <input
+                      type="number"
+                      name="min_charge"
+                      value={formData.min_charge}
+                      onChange={handleInputChange}
+                      placeholder="0"
+                      min="0"
+                      className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#243cd6]/50 focus:border-transparent outline-none transition-colors"
+                    />
+                  </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Max Charge ($)
+                    Max Charge ({getCurrencySymbol(formData.currency)})
                   </label>
-                  <input
-                    type="number"
-                    name="max_charge"
-                    value={formData.max_charge}
-                    onChange={handleInputChange}
-                    placeholder="Maximum charge"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#243cd6]/50 focus:border-transparent outline-none transition-colors"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm select-none">
+                      {getCurrencySymbol(formData.currency)}
+                    </span>
+                    <input
+                      type="number"
+                      name="max_charge"
+                      value={formData.max_charge}
+                      onChange={handleInputChange}
+                      placeholder="0"
+                      min="0"
+                      className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#243cd6]/50 focus:border-transparent outline-none transition-colors"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -507,7 +605,7 @@ export default function Jobs() {
                 >
                   <option value="">Select a category</option>
                   {categories.map((cat) => (
-                    <option key={cat.category_id} value={cat.category_id}>
+                    <option key={cat.id} value={cat.id}>
                       {cat.name}
                     </option>
                   ))}
