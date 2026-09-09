@@ -20,6 +20,33 @@ export const getAdminBookingDetail = async (id: string) => {
   }
 };
 
+export const patchAdminBooking = async (id: string, data: any) => {
+  try {
+    const response = await api.patch(`/api/admin/bookings/${id}/`, data);
+    return response?.data;
+  } catch (error) {
+    handleApiError(error);
+  }
+};
+
+export const approveAdminBooking = async (id: string) => {
+  try {
+    const response = await api.patch(`/api/admin/bookings/${id}/approve/`);
+    return response?.data;
+  } catch (error) {
+    handleApiError(error);
+  }
+};
+
+export const refundAdminBooking = async (id: string, data: { refund_percent: number }) => {
+  try {
+    const response = await api.patch(`/api/admin/bookings/${id}/refund/`, data);
+    return response?.data;
+  } catch (error) {
+    handleApiError(error);
+  }
+};
+
 // Conversations
 export const getAdminConversations = async (params?: any) => {
   try {
@@ -189,6 +216,34 @@ export const deleteAdminUserAction = async (id: string, adminAction: string) => 
 export const getAdminUserReferrals = async (id: string) => {
   try {
     const response = await api.get(`/api/admin/users/${id}/referrals/`);
+    return response?.data;
+  } catch (error) {
+    handleApiError(error);
+  }
+};
+
+// Referral Withdrawals
+export const getAdminReferralWithdrawals = async (params?: any) => {
+  try {
+    const response = await api.get("/api/admin/referral-withdrawals/", { params });
+    return response?.data;
+  } catch (error) {
+    handleApiError(error);
+  }
+};
+
+export const approveAdminReferralWithdrawal = async (id: string, data?: any) => {
+  try {
+    const response = await api.patch(`/api/admin/referral-withdrawals/${id}/approve/`, data || {});
+    return response?.data;
+  } catch (error) {
+    handleApiError(error);
+  }
+};
+
+export const rejectAdminReferralWithdrawal = async (id: string, data?: any) => {
+  try {
+    const response = await api.patch(`/api/admin/referral-withdrawals/${id}/reject/`, data || {});
     return response?.data;
   } catch (error) {
     handleApiError(error);
