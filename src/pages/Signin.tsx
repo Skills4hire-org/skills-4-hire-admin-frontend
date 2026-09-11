@@ -32,8 +32,16 @@ export default function SignIn() {
     try {
       const res = await login(validatedData);
       console.log("LOGIN RESPONSE:", res);
-      if (res?.access) {
-        localStorage.setItem("admin_token", res.access);
+
+      const token = res?.access || res?.data?.access;
+      console.log("Storing token:", token ? "yes (length " + token.length + ")" : "NO - token is undefined");
+
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("token");
+      localStorage.removeItem("access");
+
+      if (token) {
+        localStorage.setItem("admin_token", token);
       }
       navigate("/admin");
     } catch (err) {
